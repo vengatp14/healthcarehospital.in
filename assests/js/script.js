@@ -11,6 +11,8 @@ let scene, heartScene;
 // LOADING SCREEN ANIMATION
 // ================================
 
+
+
 window.addEventListener('load', () => {
     const loader = document.getElementById('loader');
     const progressBar = document.getElementById('progressBar');
@@ -24,21 +26,30 @@ window.addEventListener('load', () => {
             clearInterval(interval);
             
             // Open hospital doors
-            setTimeout(() => {
-                loader.classList.add('opening');
-                
-                // Hide loader after doors open
-                setTimeout(() => {
-                    loader.classList.add('hidden');
-                    
-                    // Start heartbeat sound after loader
-                    setTimeout(() => {
-                        if (soundEnabled) {
-                            playHeartbeat();
-                        }
-                    }, 500);
-                }, 1500);
-            }, 500);
+            // FIND THIS:
+setTimeout(() => {
+    loader.classList.add('hidden');
+    
+    // Start heartbeat sound after loader
+    setTimeout(() => {
+        if (soundEnabled) {
+            playHeartbeat();
+        }
+    }, 500);
+}, 1500);
+
+// REPLACE WITH THIS:
+setTimeout(() => {
+    loader.classList.add('hidden');
+    document.body.classList.add('loaded'); // ← ADD THIS LINE
+    
+    // Start heartbeat sound after loader
+    setTimeout(() => {
+        if (soundEnabled) {
+            playHeartbeat();
+        }
+    }, 500);
+}, 1500);
         }
         
         progressBar.style.width = progress + '%';
@@ -50,76 +61,94 @@ window.addEventListener('load', () => {
 // SOUND SYSTEM
 // ================================
 
+// ================================
+// SOUND SYSTEM
+// ================================
+
+// Single shared AudioContext - never recreate it
+let audioCtx = null;
+
+function getAudioContext() {
+    if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    // Resume if suspended (browser autoplay policy)
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
+}
+
 function playClickSound() {
     if (!soundEnabled) return;
-    
-    // Create a simple beep sound using Web Audio API
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.1);
+
+    try {
+        const ctx = getAudioContext();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.1);
+    } catch (e) {
+        console.log('Click sound error:', e);
+    }
 }
 
 function playHeartbeat() {
     if (!soundEnabled || heartbeatPlaying) return;
-    
     heartbeatPlaying = true;
-    
-    // Simulate heartbeat with Web Audio API
-    function beat() {
-        if (!soundEnabled || !heartbeatPlaying) return;
-        
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = 100;
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.15);
-        
-        // Second beat
-        setTimeout(() => {
-            if (!soundEnabled || !heartbeatPlaying) return;
-            
-            const oscillator2 = audioContext.createOscillator();
-            const gainNode2 = audioContext.createGain();
-            
-            oscillator2.connect(gainNode2);
-            gainNode2.connect(audioContext.destination);
-            
-            oscillator2.frequency.value = 100;
-            oscillator2.type = 'sine';
-            
-            gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-            
-            oscillator2.start(audioContext.currentTime);
-            oscillator2.stop(audioContext.currentTime + 0.15);
-        }, 200);
-        
-        setTimeout(beat, 1000);
+    scheduleHeartbeat();
+}
+
+function scheduleHeartbeat() {
+    if (!soundEnabled || !heartbeatPlaying) return;
+
+    try {
+        const ctx = getAudioContext();
+
+        // First beat
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.frequency.value = 100;
+        osc1.type = 'sine';
+        gain1.gain.setValueAtTime(0.5, ctx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        osc1.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.15);
+
+        // Second beat - scheduled on same context
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.frequency.value = 100;
+        osc2.type = 'sine';
+        gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.2);
+        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc2.start(ctx.currentTime + 0.2);
+        osc2.stop(ctx.currentTime + 0.35);
+
+    } catch (e) {
+        console.log('Heartbeat error:', e);
     }
-    
-    beat();
+
+    // Schedule next heartbeat
+    setTimeout(() => {
+        if (soundEnabled && heartbeatPlaying) {
+            scheduleHeartbeat();
+        }
+    }, 1000);
 }
 
 function stopHeartbeat() {
@@ -129,6 +158,37 @@ function stopHeartbeat() {
 // ================================
 // THEME TOGGLE
 // ================================
+
+// Create hamburger button dynamically
+const hamburger = document.createElement('button');
+hamburger.className = 'hamburger-btn';
+hamburger.innerHTML = '<i class="bi bi-list"></i>';
+hamburger.title = 'Menu';
+document.body.appendChild(hamburger);
+
+const desktopNav = document.querySelector('.desktop-nav');
+
+hamburger.addEventListener('click', function () {
+    desktopNav.classList.toggle('menu-open');
+    this.innerHTML = desktopNav.classList.contains('menu-open')
+        ? '<i class="bi bi-x-lg"></i>'
+        : '<i class="bi bi-list"></i>';
+});
+
+// Close menu when nav link clicked
+document.querySelectorAll('.nav-menu .nav-link').forEach(link => {
+    link.addEventListener('click', () => {
+        desktopNav.classList.remove('menu-open');
+        hamburger.innerHTML = '<i class="bi bi-list"></i>';
+    });
+});
+
+// Hide hamburger on desktop
+function checkHamburger() {
+    hamburger.style.display = window.innerWidth >= 992 ? 'none' : 'flex';
+}
+checkHamburger();
+window.addEventListener('resize', checkHamburger);
 
 const themeToggle = document.getElementById('themeToggle');
 const soundToggle = document.getElementById('soundToggle');
@@ -714,3 +774,4 @@ console.log('Healthcare Hospital Website Loaded Successfully! 🏥❤️');
 console.log('3D Heart Animation: Active');
 console.log('Theme System: ' + currentTheme);
 console.log('Sound System: ' + (soundEnabled ? 'Enabled' : 'Disabled'));
+
